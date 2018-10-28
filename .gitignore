@@ -1,0 +1,11 @@
+.idea
+*.pyc
+
+# train data
+data/
+
+logs/
+save_model/
+experiments/cell_visualize_pdf/
+experiments/image_view/
+
