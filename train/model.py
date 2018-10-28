@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from darts.operations import *
-from darts.utils import drop_path
+from cnas.operations import *
+from cnas.utils import drop_path
 
 class BuildCell(nn.Module):
     """Build a cell from genotype

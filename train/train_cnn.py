@@ -10,11 +10,11 @@ import torch.nn as nn
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
-
+# add path
 sys.path.append('..')
-import darts.utils as dutils
-import darts.datasets as dartsdset
-import darts.geno_types as geno_types
+import cnas.utils as dutils
+import cnas.datasets as dartsdset
+import cnas.geno_types as geno_types
 from model import EvalNetwork, CrossEntropyLabelSmooth
 
 parser = argparse.ArgumentParser("cifar or imagenet")

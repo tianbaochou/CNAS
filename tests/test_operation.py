@@ -3,7 +3,7 @@ import time
 import torch
 import sys
 sys.path.append('..')
-from darts.operations import *
+from cnas.operations import *
 
 class TestOperation(unittest.TestCase):
     def setUp(self):
