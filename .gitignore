@@ -7,3 +7,4 @@ experiments/cell_visualize_pdf/
 experiments/heap_map/
 experiments/image_view/
 experiments/performance_view/
+*.pyc
