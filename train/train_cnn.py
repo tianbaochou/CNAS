@@ -10,23 +10,24 @@ import torch.nn as nn
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
-# add path
+from adabound import AdaBound
+
 sys.path.append('..')
-import cnas.utils as dutils
-import cnas.datasets as dartsdset
-import cnas.geno_types as geno_types
+import darts.utils as dutils
+import darts.datasets as dartsdset
+import darts.geno_types as geno_types
 from model import EvalNetwork, CrossEntropyLabelSmooth
 
 parser = argparse.ArgumentParser("cifar or imagenet")
-parser.add_argument('--train-dataset', type=str, default='cifar10', help='training cifar10/cifar100/imagenet')
-parser.add_argument('--data', type=str, default='../data/cifar10', help='location of the data corpus')
+parser.add_argument('--train-dataset', type=str, default='cifar10', help='training data')
+parser.add_argument('--data', type=str, default='/train_tiny_data/train_data/cifar10', help='location of the data corpus')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('--batch-size', type=int, default=40, help='batch size')
+parser.add_argument('--batch-size', type=int, default=128, help='batch size')
 parser.add_argument('--num-classes', type=int, default=10, help='num of classes')
-parser.add_argument('--learning-rate', type=float, default=0.0224, help='init learning rate')
+parser.add_argument('--learning-rate', type=float, default=0.001, help='init learning rate')
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
-parser.add_argument('--weight-decay', type=float, default=3e-4, help='weight decay')
+parser.add_argument('--weight-decay', type=float, default=5e-4, help='weight decay')
 parser.add_argument('--report-freq', type=float, default=50, help='report frequency')
 parser.add_argument('--multi-gpus', action='store_true', default=False, help='use multi gpus')
 parser.add_argument('--epochs', type=int, default=200, help='num of training epochs')
@@ -36,9 +37,9 @@ parser.add_argument('--model-path', type=str, default='saved_models', help='path
 parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
 parser.add_argument('--auxiliary-weight', type=float, default=0.4, help='weight for auxiliary loss')
 parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
-parser.add_argument('--use_adam', action='store_true', default=False, help='use cutout')
+parser.add_argument('--opt', type=str, default='sgd', help='use sgd')
 parser.add_argument('--cutout-length', type=int, default=16, help='cutout length')
-parser.add_argument('--drop-path-prob', type=float, default=0.2, help='drop path probability')
+parser.add_argument('--drop-path-prob', type=float, default=0.05, help='drop path probability')
 parser.add_argument('--no-dropout', action='store_true', default=False, help='use dropout')
 parser.add_argument('--save', type=str, default='EXP', help='experiment name')
 parser.add_argument('--seed', type=int, default=0, help='random seed')
@@ -72,21 +73,22 @@ class TrainNetwork(object):
             # cifar10:  6000 images per class, 10 classes, 50000 training images and 10000 test images
             # cifar100: 600 images per class, 100 classes, 500 training images and 100 testing images per class
             self.args.num_classes = 100
-            self.args.data = '../data/cifar100'
+            self.args.layers = 20
+            self.args.data = '/train_tiny_data/train_data/cifar100'
         elif 'imagenet' == self.args.train_dataset:
-            self.args.data = '../data/imagenet'
+            self.args.data = '/train_data/imagenet'
             self.args.num_classes = 1000
-            self.args.learning_rate = 0.1
             self.args.weight_decay = 3e-5
             self.args.report_freq = 100
             self.args.init_channels = 50
-            self.args.layers = 14
             self.args.drop_path_prob = 0
-        elif 'tiny_imagenet' == self.args.train_dataset:
-            self.args.data = '../data/tiny-imagenet'
+        elif 'tiny-imagenet' == self.args.train_dataset:
+            self.args.data = '/train_tiny_data/train_data/tiny-imagenet'
             self.args.num_classes = 200
-            self.args.layers = 14
-            self.args.learning_rate = 0.1
+        elif 'food101' == self.args.train_dataset:
+            self.args.data = '/train_tiny_data/train_data/food-101'
+            self.args.num_classes = 101
+            self.args.init_channels = 48
 
     def _init_log(self):
         self.args.save = '../logs/eval/' + self.args.arch + '/' + self.args.train_dataset + '/eval-{}-{}'.format(self.args.save, time.strftime('%Y%m%d-%H%M'))
@@ -126,11 +128,9 @@ class TrainNetwork(object):
             return scheduler
 
         genotype = eval('geno_types.%s' % self.args.arch)
-        reduce_first = (False if 'cifar10' in self.args.train_dataset or
-                                 'tiny_imagenet' == self.args.train_dataset
-                        else True)
+        reduce_level = (0 if 'cifar10' in self.args.train_dataset else 0)
         model = EvalNetwork(self.args.init_channels, self.args.num_classes, 0,
-                            self.args.layers, self.args.auxiliary, genotype, reduce_first)
+                            self.args.layers, self.args.auxiliary, genotype, reduce_level)
 
         # Try move model to multi gpus
         if torch.cuda.device_count() > 1 and self.args.multi_gpus:
@@ -148,12 +148,16 @@ class TrainNetwork(object):
             criterion = CrossEntropyLabelSmooth(self.args.num_classes, self.args.label_smooth)
         self.criterion = criterion.to(self.device)
 
-        if self.args.use_adam:
+        if self.args.opt == 'adam':
             self.optimizer = torch.optim.Adamax(
                 model.parameters(),
                 self.args.learning_rate,
                 weight_decay=self.args.weight_decay
             )
+        elif self.args.opt == 'adabound':
+            self.optimizer = AdaBound(model.parameters(),
+            self.args.learning_rate,
+            weight_decay=self.args.weight_decay)
         else:
             self.optimizer = torch.optim.SGD(
                 model.parameters(),
@@ -200,7 +204,7 @@ class TrainNetwork(object):
             valid_queue = torch.utils.data.DataLoader(
                 valid_data, batch_size = self.args.batch_size, shuffle=True, pin_memory=True, num_workers=4
             )
-        elif 'tiny_imagenet' == self.args.train_dataset:
+        elif 'tiny-imagenet' == self.args.train_dataset:
             train_transform, valid_transform = dutils.data_transforms_tiny_imagenet()
             train_data = dartsdset.TinyImageNet200(self.args.data, train=True, download=True, transform=train_transform)
             valid_data = dartsdset.TinyImageNet200(self.args.data, train=False, download=True, transform=valid_transform)
@@ -214,6 +218,20 @@ class TrainNetwork(object):
             traindir = os.path.join(self.args.data, 'train')
             validdir = os.path.join(self.args.data, 'val')
             train_transform, valid_transform = dutils.data_transforms_imagenet()
+            train_data = dset.ImageFolder(
+                traindir,train_transform)
+            valid_data = dset.ImageFolder(
+                validdir,valid_transform)
+
+            train_queue = torch.utils.data.DataLoader(
+                train_data, batch_size=self.args.batch_size, shuffle=True, pin_memory=True, num_workers=4)
+
+            valid_queue = torch.utils.data.DataLoader(
+                valid_data, batch_size=self.args.batch_size, shuffle=False, pin_memory=True, num_workers=4)
+        elif 'food101' == self.args.train_dataset:
+            traindir = os.path.join(self.args.data, 'train')
+            validdir = os.path.join(self.args.data, 'val')
+            train_transform, valid_transform = dutils.data_transforms_food101()
             train_data = dset.ImageFolder(
                 traindir,train_transform)
             valid_data = dset.ImageFolder(
@@ -246,6 +264,7 @@ class TrainNetwork(object):
             valid_acc_top1, valid_acc_top5, valid_obj = self.infer()
             self.logger.info('valid loss %e, top1 valid acc %f top5 valid acc %f',
                         valid_obj, valid_acc_top1, valid_acc_top5)
+            self.logger.info('best valid acc %f', self.best_acc_top1)
 
             is_best = False
             if valid_acc_top1 > self.best_acc_top1:

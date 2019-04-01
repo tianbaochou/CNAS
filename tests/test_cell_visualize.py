@@ -1,7 +1,6 @@
 import unittest
 import os
 import platform
-import geno_types
 from visualize import plot
 
 class TestCellVis(unittest.TestCase):

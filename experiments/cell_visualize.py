@@ -1,11 +1,10 @@
+import sys
 import os
 import platform
 import time
-import sys
-sys.path.append('..')
-from cnas import visualize
-from cnas.utils import create_exp_dir
-import geno_types
+from darts import visualize
+from darts.utils import create_exp_dir
+
 
 def main():
 

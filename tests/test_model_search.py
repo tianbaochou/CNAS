@@ -1,9 +1,7 @@
 import unittest
 import torch
 import torch.nn.functional as F
-import sys
-sys.path.append('..')
-from cnas.model_search import *
+from darts.model_search import *
 
 class TestModelSearch(unittest.TestCase):
     def setUp(self):

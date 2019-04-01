@@ -19,7 +19,7 @@ import torchvision.datasets as datasets
 import torchvision.models as models
 
 sys.path.append('..')
-import cnas.utils as dutils
+import darts.utils as dutils
 
 # Get all model name
 model_names = sorted(name for name in models.__dict__

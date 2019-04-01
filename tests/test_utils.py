@@ -1,9 +1,8 @@
 import unittest
 import torch
 import matplotlib.pyplot as plt
-import sys
-sys.path.append('..')
-from cnas.utils import *
+
+from darts.utils import *
 
 class TestUtils(unittest.TestCase):
 

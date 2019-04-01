@@ -1,0 +1,6 @@
+numpy
+seaborn
+matplotlib
+torchvision
+"torch>=1.0"
+graphviz

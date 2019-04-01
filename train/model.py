@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from cnas.operations import *
-from cnas.utils import drop_path
+from darts.operations import *
+from darts.utils import drop_path
 
 class BuildCell(nn.Module):
     """Build a cell from genotype
@@ -155,7 +155,7 @@ class AuxiliaryHead(nn.Module):
 
     Attributes:
         c: int, initial channel for auxiliary classifier layer
-        num_classes: int, 10/100/200/1000
+        num_classes: int, 10/100/101/200/1000 etc.
     """
 
     def __init__(self, c, num_classes):
@@ -179,7 +179,6 @@ class AuxiliaryHead(nn.Module):
         x = self.classifier(x.view(x.size(0), -1))
         return x
 
-
 class EvalNetwork(nn.Module):
     """Construct a network for ImageNet
 
@@ -189,44 +188,39 @@ class EvalNetwork(nn.Module):
         layers: int, the total number of cells
         auxiliary: boolean, whether use a auxiliary classifier layer
         genotype: tuple, coding of architecture
-        reduce_first: int, since some input image is larger(eg imagenet2012),
-                            we would like to insert reducible block for input.
+        reduce_level: int, the level of reduce dimension of input images before put into network
+                      0, 1, 2: [0,32], [32,64], [64, 128]
     """
 
-    def __init__(self, c, num_classes, drop_path_prob, layers, auxiliary, genotype, reduce_first):
+    def __init__(self, c, num_classes, drop_path_prob, layers, auxiliary, genotype, reduce_level=0):
         super(EvalNetwork, self).__init__()
         self._layers = layers
         self._auxiliary = auxiliary
         self._drop_path_prob = drop_path_prob
-        self._reduce_frist = reduce_first
+        self._reduce_level = reduce_level
 
-        if self._reduce_frist:
-            # <Ref: Progressive Neural Architecture Search>
-            # If the input size larger than 128, like imagenet
-            # the whole model will be too larger, so we need reduce feature map size first!
-            self.stem0 = nn.Sequential(
-                nn.Conv2d(3, c // 2, kernel_size=3, stride=2, padding=1, bias=False),
-                nn.BatchNorm2d(c // 2),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(c//2, c, kernel_size=3, stride=2, padding=1, bias=False),
-                nn.BatchNorm2d(c)
-            )
-            self.stem1 = nn.Sequential(
-              nn.ReLU(inplace=True),
-              nn.Conv2d(c, c, 3, stride=2, padding=1, bias=False),
-              nn.BatchNorm2d(c),
-            )
-            c_curr = c
-            reduction_prev = True
-        else:
-            stem_multiplier = 3
-            c_curr = stem_multiplier * c
+        stem_multiplier = 3
+        c_curr = stem_multiplier * c
+        if self._reduce_level == 0:
             self.stem = nn.Sequential(
                 nn.Conv2d(3, c_curr, kernel_size=3,padding=1, bias=False),
                 nn.BatchNorm2d(c_curr)
             )
-            reduction_prev = False
+        elif self._reduce_level == 1:
+            self.stem = nn.Sequential(
+              nn.Conv2d(3, c_curr, 3, stride=2, padding=1, bias=False),
+              nn.BatchNorm2d(c_curr),
+            )
+        elif self._reduce_level == 2:
+            self.stem = nn.Sequential(
+                nn.Conv2d(3, c_curr // 2, kernel_size=3,padding=1, bias=False),
+                nn.BatchNorm2d(c_curr // 2),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(c_curr // 2, c_curr, kernel_size=3, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(c_curr // 2)
+            )
 
+        reduction_prev = False
         c_prev_prev, c_prev, c_curr = c_curr, c_curr, c
         self.cells = nn.ModuleList()
         for i in range(0, layers):
@@ -254,11 +248,7 @@ class EvalNetwork(nn.Module):
 
     def forward(self, input):
         logits_aux = None
-        if self._reduce_frist:
-            s0 = self.stem0(input)
-            s1 = self.stem1(s0)
-        else:
-            s0 = s1 = self.stem(input)
+        s0 = s1 = self.stem(input)
 
         for i, cell in enumerate(self.cells):
             s0, s1 = s1, cell(s0, s1, self._drop_path_prob)
@@ -278,7 +268,6 @@ class CrossEntropyLabelSmooth(nn.Module):
         num_classes: int, the number of classes
         epsilon: float, the parameter for label smooth
     """
-
     def __init__(self, num_classes, epsilon):
         super(CrossEntropyLabelSmooth, self).__init__()
         self.num_classes = num_classes
