@@ -56,7 +56,7 @@ CUDA_VISIBLE_DEVICES=1,2  train_cnn.py --cutout  --multi-gpus
 + run on single gpus
 we will find a max free memory gpus and run on it.
 ```bash
-train_cnn.py --cutout  --multi-gpus
+python train_cnn.py --cutout  --multi-gpus
 ```
 
 
