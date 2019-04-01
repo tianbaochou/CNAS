@@ -16,7 +16,7 @@ sys.path.append('..')
 import darts.utils as dutils
 import darts.datasets as dartsdset
 import darts.geno_types as geno_types
-from model import EvalNetwork, CrossEntropyLabelSmooth
+from darts.model import EvalNetwork, CrossEntropyLabelSmooth
 
 parser = argparse.ArgumentParser("cifar or imagenet")
 parser.add_argument('--train-dataset', type=str, default='cifar10', help='training data')

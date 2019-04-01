@@ -1,7 +1,7 @@
 import torch
 import time
 import numpy as np
-from utils import concat
+from darts.utils import concat
 
 class Architecture(object):
     """Architecture construct by our methods

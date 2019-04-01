@@ -12,11 +12,11 @@ import torch.nn.functional as F
 import torchvision.datasets as dset
 import torch.backends.cudnn as cudnn
 import numpy as np
-
-import utils as dutils
-from model_search import Network
-from architecture import Architecture
-import datasets as dartsdset
+sys.path.append('..')
+import darts.utils as dutils
+from darts.model_search import Network
+from darts.architecture import Architecture
+import darts.datasets as dartsdset
 
 parser = argparse.ArgumentParser('Architecture Searching')
 parser.add_argument('--train-dataset', type=str, default='cifar10',

@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from operations import *
-from models.geno_types import *
+from darts.operations import *
+from darts.geno_types import *
 
 class MixedOp(nn.Module):
     """Mixed Operations
@@ -14,15 +14,15 @@ class MixedOp(nn.Module):
         stride: int, the sliding filter step
     """
 
-    def __init__(self, c, stride):
+    def __init__(self, c, stride, affine):
         super(MixedOp, self).__init__()
         self._ops = nn.ModuleList()
         for primitive in PRIMITIVES:
-            op = OPS[primitive](c, stride, False)
+            op = OPS[primitive](c, stride, affine=affine)
             if 'pool' in primitive:
                 # BatchNorm should make sure affine = False to avoid
                 # rescale the output of the candidate operations
-                op = nn.Sequential(op, nn.BatchNorm2d(c, affine=False))
+                op = nn.Sequential(op, nn.BatchNorm2d(c, affine=affine))
             self._ops.append(op)
 
     def forward(self, x, weights):
@@ -44,17 +44,17 @@ class Cell(nn.Module):
         reduction_prev: boolean, whether prev cell is a reduction
     """
 
-    def __init__(self, meta_node_num, c_prev_prev, c_prev, c, reduction, reduction_prev):
+    def __init__(self, meta_node_num, c_prev_prev, c_prev, c, reduction, reduction_prev, affine=False):
         super(Cell, self).__init__()
         self.reduction = reduction
 
         #
         if reduction_prev:
-            self.preprocess0 = FactorizedReduce(c_prev_prev, c, affine=False)
+            self.preprocess0 = FactorizedReduce(c_prev_prev, c, affine=affine)
         else:
-            self.preprocess0 = ReLUConvBN(c_prev_prev, c, 1, 1, 0, affine=False)
+            self.preprocess0 = ReLUConvBN(c_prev_prev, c, 1, 1, 0, affine=affine)
 
-        self.preprocess1 =ReLUConvBN(c_prev, c, 1, 1, 0, affine=False)
+        self.preprocess1 =ReLUConvBN(c_prev, c, 1, 1, 0, affine=affine)
         self._metan_num = meta_node_num
         self._multiplier = meta_node_num
         self._inp_node_num = 2
@@ -64,7 +64,7 @@ class Cell(nn.Module):
         for i in range(self._metan_num): # meta-node id
             for j in range(self._inp_node_num + i): # the input id for remaining meta-node
                 stride = 2 if reduction and j < 2 else 1
-                op = MixedOp(c, stride)
+                op = MixedOp(c, stride, affine)
                 self._ops.append(op)
 
     def forward(self, s0, s1, weight):
@@ -121,20 +121,20 @@ class Network(nn.Module):
         if self._reduce_level == 0:
             self.stem = nn.Sequential(
                 nn.Conv2d(inp_c, c_curr, kernel_size=3, padding=1, bias=False),
-                nn.BatchNorm2d(c_curr, affine=False)
+                nn.BatchNorm2d(c_curr, affine=False if not use_sparse else True)
             )
         elif self._reduce_level == 1:
             self.stem = nn.Sequential(
               nn.Conv2d(inp_c, c_curr, 3, stride=2, padding=1, bias=False),
-              nn.BatchNorm2d(c_curr, affine=False)
+              nn.BatchNorm2d(c_curr, affine=False if not use_sparse else True)
             )
         elif self._reduce_level == 2:
             self.stem = nn.Sequential(
                 nn.Conv2d(inp_c, c_curr // 2, kernel_size=3,padding=1, bias=False),
-                nn.BatchNorm2d(c_curr // 2, affine=False),
+                nn.BatchNorm2d(c_curr // 2, affine=False if not use_sparse else True),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(c_curr // 2, c_curr, kernel_size=3, stride=2, padding=1, bias=False),
-                nn.BatchNorm2d(c_curr, affine=False)
+                nn.BatchNorm2d(c_curr, affine=False if not use_sparse else True)
             )
 
         # Construct init architecture by stacking cells
@@ -148,7 +148,8 @@ class Network(nn.Module):
                 reduction = True
             else:
                 reduction = False
-            cell = Cell(num_meta_node, c_prev_prev, c_prev, c_curr, reduction, reduction_prev)
+            cell = Cell(num_meta_node, c_prev_prev, c_prev, c_curr, reduction,
+                        reduction_prev, affine=False if not use_sparse else True)
             reduction_prev = reduction
             self.cells += [cell]
             c_prev_prev, c_prev = c_prev,  self._multiplier*c_curr

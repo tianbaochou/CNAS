@@ -6,6 +6,8 @@ Our work is based on [DARTS](https://arxiv.org/abs/1806.09055)
 
 ## 1. Requirements
 
++ Ubuntu14.04/16.04 or Window10 (Win7 may also support.)
+
 + Python >= 3.6
 
 + torch >= 0.4.1
@@ -14,7 +16,7 @@ Our work is based on [DARTS](https://arxiv.org/abs/1806.09055)
 
 + seaborn (optional)
 
-+ graphviz (optional)
++ pygraphviz (optional)
 
 NOTE: pytorch 0.4.x also work ok, but will meet [ConnectionResetError](https://github.com/pytorch/pytorch/issues/9127)
 When use the second approximation. 
@@ -24,19 +26,39 @@ Todo:
 - [ ] Merge into the CNASV prototype
 - [ ] Replace the backbone network by automatically search outer network
 - [ ] Give up the cell-based architecture for designing more flexible search space
-   
+- [ ] Merge this work to CNASV ( Search-Train Prototype for Computer Vision [CNASV](https://github.com/tianbaochou/CNASV))
+ 
 ## 2. Usage
+
+```bash
+pip3 install requirements.txt
+```
+
+**Notice**
+> if you use win10, and want to show the cell architecture with graph, you 
+need install the pygraphviz and add ```$workdir$\\3rd_tools\\graphviz-2.38\\bin```
+into environment path. Here ```$workdir$``` is the custom work directory. such as ```E:\\workspace\\cnas``` 
+
+
 > How to search:
 
-```python
+```bash
 python train_search.py --num-meta-node 4 --cutout --data '../data/cifar10'
 ```
 
 > How to evaluate the CNN architecture we searched
 
-```python
++ run on multi gpus (gpu1, gpu2)
+```bash
 CUDA_VISIBLE_DEVICES=1,2  train_cnn.py --cutout  --multi-gpus
 ```
+
++ run on single gpus
+we will find a max free memory gpus and run on it.
+```bash
+train_cnn.py --cutout  --multi-gpus
+```
+
 
 **Configure details**
 
